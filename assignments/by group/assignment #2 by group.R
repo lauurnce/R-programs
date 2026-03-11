@@ -35,6 +35,7 @@ calc_gemini_monthly <- function(base_subscription_amount, duration_months) {
 calc_gemini_monthly(13200, 12)
 
 
+
 # ---- Data Structures in R ----
 ## ---- Vector ----
 # Example: Storing information about a project's core team members
@@ -51,7 +52,7 @@ v_experience_years <- c(2, 2, 1, 5)
 v_role <- c("Investor", "Developer", "Designer", "Manager")
 
 ## ---- Factor ----
-###---- 1. Unordered Factor----
+###----1. Unordered Factor----
 # Used when the categories do not have a natural ranking or hierarchy.
 # Example: The 'Housing' column contains values like "own", "rent", and "free". 
 # One housing status is not mathematically "greater" or "less" than another.
@@ -73,7 +74,7 @@ f_job_level <- factor(DATA$Job,
 # "Entry-Level" < "Junior" < "Mid-Level" < "Senior"
 
 ## ---- Table ----
-###---- 1. One-Variable Table (Frequency Count)----
+###----1. One-Variable Table (Frequency Count)----
 # Let's count the total number of "good" vs "bad" credit risks in the dataset.
 t_risk_status <- table(DATA$Risk)
 # What it does: Outputs a simple count (Good: 700, Bad: 300).
@@ -85,7 +86,7 @@ t_housing_vs_risk <- table(DATA$Housing, DATA$Risk)
 # What it does: Creates a 2D matrix where rows are Housing status and columns are Risk. 
 # This helps us see if homeowners default less than renters.
 
-###---- 3. Three-Variable Table (Multi-Dimensional Array)----
+###----3. Three-Variable Table (Multi-Dimensional Array)----
 # Let's take it a step further. We'll look at Housing, Risk, and whether the 
 # loan is a "Short Term" loan. 
 # We can actually put a condition (like Duration <= 12) directly inside the table!
@@ -114,3 +115,117 @@ df_tech_team <- data.frame(
 )
 # What it does: If you run 'df_tech_team', it will output a formatted 4x4 table 
 
+
+
+# ---- Data Manipulation using dplyr Package ----
+# Load the package
+library(dplyr)
+
+###---- 1. filter() and select()----
+# Let's find young professionals (Age <= 25) who are asking for decent-sized
+# loans (Credit_amount >= 2000), perhaps to fund new servers or cloud architecture.
+# We then select only the columns relevant to our tech-loan analysis.
+
+tech_candidates <- DATA %>% 
+  filter(Age <= 25 & Credit_amount >= 2000) %>% 
+  dplyr::select(Age, Job, Housing, Credit_amount, Duration, Risk)
+
+###----2. mutate() and conditional statement ifelse()----
+# Now, let's create TWO new columns. 
+# First: Calculate their estimated monthly payment.
+# Second: Automatically flag them for "Fast-Track" approval if R assesses 
+# them as a "good" risk and they plan to pay it off in under 2 years (24 months).
+
+tech_candidates <- tech_candidates %>% 
+  mutate(
+    Est_Monthly_Pay = Credit_amount / Duration,
+    Approval_Status = ifelse(Risk == "good" & Duration <= 24, "Fast-Track", "Manual Review")
+  )
+
+###---- 3. group_by() and summarize()----
+# Finally, let's generate some descriptive statistics for a report. 
+# We will group these young tech candidates by their Job level and calculate 
+# the average funding they are requesting, as well as count how many exist in each group.
+
+tech_loan_summary <- tech_candidates %>% 
+  group_by(Job) %>% 
+  summarize(
+    Avg_Requested_Funding = mean(Credit_amount, na.rm = TRUE),
+    Max_Duration_Months = max(Duration, na.rm = TRUE),
+    Total_Applicants = n() 
+  )
+
+# View the final summarized report
+tech_loan_summary
+
+
+# ---- Data Visualization ----
+
+# Load required package
+library(ggplot2)
+
+attach(DATA) 
+
+## ---- 1. Base Graphics (Traditional Step-by-Step Approach) ----
+
+# Step 1: Create an empty plot canvas
+# 'type="n"' tells R to set up the axes but NOT draw the points yet.
+plot(Age, Credit_amount, type="n", 
+     xlab="Applicant Age (Years)", 
+     ylab="Requested Tech Funding (Credit Amount)",
+     main="Empty Canvas Setup")
+
+# Step 2: Add the data points
+# We use pch=16 for solid circles, and color them based on Risk.
+# We have to split the points to color "good" risk blue and "bad" risk red.
+points(Age[Risk == "good"], Credit_amount[Risk == "good"], pch=16, col="steelblue")
+points(Age[Risk == "bad"], Credit_amount[Risk == "bad"], pch=17, col="firebrick")
+
+# Step 3: Add a regression line (Trend line)
+# This shows the general mathematical trend between Age and Credit Amount.
+abline(lm(Credit_amount ~ Age, data=DATA), col="darkgreen", lwd=2)
+
+# Step 4: Add the main title
+title(main="Tech Funding Requests by Age (Base R)")
+
+# Step 5: Add a legend so the viewer knows what the colors mean
+legend("topright", 
+       legend=c("Good Risk", "Bad Risk", "Trend Line"),
+       col=c("steelblue", "firebrick", "darkgreen"), 
+       pch=c(16, 17, NA), 
+       lty=c(NA, NA, 1))
+
+##---- 2. ggplot2 Graphics (Modern Layered Approach) ----
+ggplot(DATA, aes(x = Age, y = Credit_amount)) +
+  
+  # Layer 1: Scatter plot points
+  # 'alpha = 0.6' makes points slightly transparent so overlapping data is visible.
+  geom_point(aes(color = Risk), size = 2, alpha = 0.6) +
+  
+  # Layer 2: Smooth regression line
+  # 'se=FALSE' removes the grey confidence interval shadow for a cleaner look.
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  
+  # Layer 3: Add text labels for massive outlier loans (e.g., above 15000)
+  # This highlights massive funding requests without cluttering the whole chart.
+  geom_text(aes(label = ifelse(Credit_amount > 15000, "High Value", "")), 
+            vjust = -1, size = 3, color = "darkgray") +
+  
+  # Layer 4: Facet wrap (Split the chart)
+  # We split the visual into two side-by-side charts based on 'Sex'.
+  facet_wrap(~ Sex) +
+  
+  # Layer 5: Customize the visual theme
+  theme_minimal() +
+  theme(legend.position = "bottom", 
+        plot.title = element_text(face="bold")) +
+  
+  # Layer 6: Professional Titles and Labels
+  labs(title = "Tech Funding Distribution: Age vs. Credit Amount",
+       subtitle = "Categorized by Risk Assessment and Split by Gender",
+       x = "Applicant Age",
+       y = "Requested Credit Amount",
+       color = "Risk Level")
+
+# Note: Always remember to detach the data when you are done to keep your environment clean!
+detach(DATA)
